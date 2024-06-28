@@ -1,75 +1,132 @@
 "use server";
 
 import prisma from "@/lib/db";
-import { Post } from "@prisma/client";
+import { PostSchema } from "@/types/post";
+import { Post, Prisma, User } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 
-export const createPost = async (formData: FormData): Promise<Post | null> => {
-    const title = formData.get("title") as string;
-    const content = formData.get("content") as string;
+export const createPost = async (formData: FormData): Promise<void> => {
+    const title = formData.get("title");
+    const content = formData.get("content");
+    const slug = (formData.get("title") as string)
+        .replace(/\s+/g, "-")
+        .toLocaleLowerCase();
 
-    try {
-        if (!title && !content) {
-            return null;
+    const unValidatedPost = { title, content, slug };
+
+    const zodResult = PostSchema.safeParse(unValidatedPost);
+
+    if (!zodResult.success) {
+        throw new Error(
+            zodResult.error.errors.map((error) => error.message).join("---"),
+        );
+    } else {
+        const data = zodResult.data;
+        console.log(data);
+
+        try {
+            await prisma.post.create({
+                data: {
+                    ...data,
+                    author: {
+                        connect: {
+                            email: "nuri@mail.com",
+                        },
+                    },
+                },
+            });
+        } catch (error: any) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError) {
+                if (error.code === "P2002") {
+                    throw new Error("Error");
+                }
+            }
+            throw new Error(error);
+        } finally {
+            revalidatePath("/posts");
         }
-
-        const data = {
-            title,
-            content,
-            author: { connect: { id: "clxxbqd960000jikdp1fn2qau" } },
-        };
-
-        const newPost = await prisma.post.create({
-            data,
-        });
-
-        return newPost;
-    } catch (error) {
-        return null;
-    } finally {
-        revalidatePath("/postsApp");
     }
 };
 
-export const getPosts = async (
-    index: number,
-): Promise<{ id: string; title: string }[]> => {
+export const getPosts = async (): Promise<
+    { title: string; slug: string }[]
+> => {
     try {
         const posts = await prisma.post.findMany({
             select: {
-                id: true,
                 title: true,
+                slug: true,
             },
-            skip: index * 10,
-            take: 10,
+            take: 5,
+            orderBy: {
+                updatedAt: "desc",
+            },
         });
+
+        if (!posts) {
+            throw new Error("Error");
+        }
+
         return posts;
-    } catch (error) {
-        throw new Error("qwd");
+    } catch (error: any) {
+        throw new Error(error);
     }
 };
 
-export const getPost = async (id: string): Promise<Post> => {
+export const getPost = async (
+    slug: string,
+): Promise<{ title: string; content: string }> => {
     try {
-        const where = {
-            id,
-        };
-
         const post = await prisma.post.findUnique({
-            where,
+            where: {
+                slug,
+            },
+            select: {
+                title: true,
+                content: true,
+            },
         });
 
         if (!post) {
-            throw new Error("s");
+            throw new Error("Error");
         }
 
         return post;
-    } catch (error) {
-        throw new Error("qwd");
+    } catch (error: any) {
+        throw new Error(error);
     }
 };
 
-export const getPostsCount = async () => {
-    const count = await prisma.post.count();
-    return count;
+export const getCount = async (): Promise<number> => {
+    try {
+        return await prisma.post.count();
+    } catch (error: any) {
+        throw new Error(error);
+    }
+};
+
+export const getPostsOfUser = async (): Promise<User & { posts: Post[] }> => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: {
+                email: "nuri@mail.com",
+            },
+            include: {
+                posts: {
+                    orderBy: {
+                        createdAt: "desc",
+                    },
+                },
+            },
+        });
+
+        if (!user) {
+            throw new Error("Error");
+        }
+
+        return user;
+    } catch (error: any) {
+        throw new Error(error);
+    }
 };

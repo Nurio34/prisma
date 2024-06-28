@@ -1,10 +1,10 @@
 import { getPost } from "@/actions/post";
 import React from "react";
 
-async function Post({ params }: { params: { id: string } }) {
-    const id = params.id;
+async function Post({ params }: { params: { slug: string } }) {
+    const slug = params.slug;
 
-    const post = await getPost(id);
+    const post = await getPost(slug);
 
     return (
         <main>

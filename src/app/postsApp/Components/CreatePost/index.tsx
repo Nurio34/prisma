@@ -18,7 +18,7 @@ function CreatePost() {
                 <label htmlFor="content">
                     <textarea
                         name="content"
-                        id=""
+                        id="content"
                         rows={5}
                         placeholder="Content..."
                         className=" textarea  textarea-accent w-full"
